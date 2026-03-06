@@ -17,6 +17,10 @@ const handleToggleLoop = async (buttonId: string) => {
 const handleRemove = async (buttonId: string) => {
   await soundboard.removeButton(buttonId)
 }
+
+const handleReorder = async (fromIndex: number, toIndex: number) => {
+  await soundboard.reorderButtons(fromIndex, toIndex)
+}
 </script>
 
 <template>
@@ -49,6 +53,7 @@ const handleRemove = async (buttonId: string) => {
         @play="handlePlay"
         @toggle-loop="handleToggleLoop"
         @remove="handleRemove"
+        @reorder="handleReorder"
       />
     </main>
 

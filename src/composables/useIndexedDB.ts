@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb'
 
 const DB_NAME = 'soundboard-db'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'soundboard-store'
 
 export interface SoundButton {
@@ -10,6 +10,7 @@ export interface SoundButton {
   fileHandle: FileSystemFileHandle
   loop: boolean
   createdAt: number
+  order: number
 }
 
 let dbInstance: IDBPDatabase | null = null
@@ -64,6 +65,26 @@ export function useIndexedDB() {
     }
   }
 
+  const updateButtonOrder = async (id: string, order: number): Promise<void> => {
+    const button = await getButton(id)
+    if (button) {
+      button.order = order
+      await saveButton(button)
+    }
+  }
+
+  const saveAllButtons = async (buttons: SoundButton[]): Promise<void> => {
+    const db = await getDB()
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+
+    // Add all put operations to the transaction
+    for (const button of buttons) {
+      tx.store.put(button)
+    }
+
+    await tx.done
+  }
+
   return {
     saveButton,
     getButton,
@@ -71,5 +92,7 @@ export function useIndexedDB() {
     deleteButton,
     clearAll,
     updateButtonLoop,
+    updateButtonOrder,
+    saveAllButtons,
   }
 }

@@ -25,7 +25,12 @@ export function useSoundboard() {
       error.value = null
 
       const savedButtons = await db.getAllButtons()
-      buttons.value = savedButtons
+      // Sort by order, or createdAt if order is missing
+      buttons.value = savedButtons.sort((a, b) => {
+        const orderA = a.order ?? a.createdAt
+        const orderB = b.order ?? b.createdAt
+        return orderA - orderB
+      })
 
       isInitialized.value = true
     } catch (err) {
@@ -88,12 +93,16 @@ export function useSoundboard() {
         continue // Skip duplicates
       }
 
+      // Calculate next order value
+      const maxOrder = buttons.value.reduce((max, b) => Math.max(max, b.order ?? 0), 0)
+
       const newButton: SoundButton = {
         id: crypto.randomUUID(),
         name: audioFile.name,
         fileHandle: audioFile.handle,
         loop: false,
         createdAt: Date.now(),
+        order: maxOrder + 1,
       }
 
       await db.saveButton(newButton)
@@ -110,6 +119,15 @@ export function useSoundboard() {
       if (!file) {
         error.value = `Cannot access file: ${button.name}. Permission may have been denied.`
         return
+      }
+
+      // Check if this sound is already playing
+      const state = audioPlayer.getPlayerState(button.id)
+      const isCurrentlyPlaying = state.value.isPlaying
+
+      // If another sound is playing, stop all sounds first
+      if (!isCurrentlyPlaying) {
+        audioPlayer.stopAll()
       }
 
       await audioPlayer.togglePlayback(button.id, file, button.loop)
@@ -168,6 +186,37 @@ export function useSoundboard() {
     return audioPlayer.getPlayerState(buttonId)
   }
 
+  // Reorder buttons via drag and drop
+  const reorderButtons = async (fromIndex: number, toIndex: number): Promise<void> => {
+    try {
+      // Validate indices
+      if (fromIndex < 0 || fromIndex >= buttons.value.length) return
+      if (toIndex < 0 || toIndex >= buttons.value.length) return
+      if (fromIndex === toIndex) return
+
+      // Reorder in local array
+      const reordered = [...buttons.value]
+      const [movedButton] = reordered.splice(fromIndex, 1)
+
+      if (!movedButton) return // Safety check
+
+      reordered.splice(toIndex, 0, movedButton)
+
+      // Update order property for all buttons
+      reordered.forEach((button, index) => {
+        button.order = index
+      })
+
+      buttons.value = reordered
+
+      // Save all updated buttons to IndexedDB
+      await db.saveAllButtons(reordered)
+    } catch (err) {
+      error.value = 'Failed to reorder buttons'
+      console.error('Reorder error:', err)
+    }
+  }
+
   onMounted(() => {
     initialize()
   })
@@ -189,5 +238,6 @@ export function useSoundboard() {
     removeButton,
     clearAll,
     getButtonState,
+    reorderButtons,
   }
 }
